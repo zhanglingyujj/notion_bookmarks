@@ -1,6 +1,6 @@
 import './theme.css'
 import { simpleTheme } from './simple';
-import { cyberpunkTheme } from './cyberpunk';
+
 
 export interface Theme {
   name: string
@@ -41,7 +41,7 @@ export function applyTheme(themeName: string) {
   if (!themes.find(t => t.name === themeName)) {
     themeName = 'simple-light'
   }
-  
+
   document.documentElement.setAttribute('data-theme', themeName)
   // 保存到 localStorage
   localStorage.setItem('theme', themeName)

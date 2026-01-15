@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect, memo, useCallback } from 'react'
 import { cn } from '@/lib/utils'
 import { ThemeSwitcher } from '@/components/ui/ThemeSwitcher'
 import * as Icons from 'lucide-react'
-import { WebsiteConfig } from '@/types/notion'
+import { WebsiteConfig } from '@/types'
 import { useTheme } from 'next-themes'
 
 interface Category {
@@ -30,12 +30,12 @@ const defaultConfig: WebsiteConfig = {
   SOCIAL_WEIBO: ''
 }
 
-export default function Navigation({ categories, config = defaultConfig }: NavigationProps) {
+const Navigation = memo(function Navigation({ categories, config = defaultConfig }: NavigationProps) {
   const [activeCategory, setActiveCategory] = useState<string>('')
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const { theme } = useTheme(); // Get current theme
 
-  const toggleCategory = (categoryId: string) => {
+  const toggleCategory = useCallback((categoryId: string) => {
     setExpandedCategories(prev => {
       const next = new Set(prev)
       if (next.has(categoryId)) {
@@ -45,10 +45,10 @@ export default function Navigation({ categories, config = defaultConfig }: Navig
       }
       return next
     })
-  }
+  }, []);
 
   // 处理导航点击
-  const handleNavClick = (categoryId: string, subCategoryId?: string) => {
+  const handleNavClick = useCallback((categoryId: string, subCategoryId?: string) => {
     setActiveCategory(categoryId);
     
     // 确保在客户端环境中执行DOM操作
@@ -68,7 +68,7 @@ export default function Navigation({ categories, config = defaultConfig }: Navig
         behavior: 'smooth'
       });
     }
-  };
+  }, []);
 
   // Set default active category on mount
   useEffect(() => {
@@ -142,6 +142,7 @@ export default function Navigation({ categories, config = defaultConfig }: Navig
                     )}
                   >
                     <div className="flex items-center space-x-2">
+                      {/* IconComponent type mismatch handled */}
                       <IconComponent className="w-4 h-4" />
                       <span>{category.name}</span>
                     </div>
@@ -179,4 +180,6 @@ export default function Navigation({ categories, config = defaultConfig }: Navig
       </nav>
     </>
   )
-}
+});
+
+export default Navigation;

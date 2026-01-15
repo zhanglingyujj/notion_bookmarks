@@ -1,9 +1,9 @@
 'use client';
 
-import { Link } from '@/types/notion';
+import { Link } from '@/types';
 import { motion } from 'framer-motion';
 import { IconExternalLink } from '@tabler/icons-react';
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, memo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 
@@ -12,7 +12,7 @@ interface LinkCardProps {
   className?: string;
 }
 
-// 提示框组件
+// 提示框组件 - 保持不变，可以考虑提取但此处暂保留
 function Tooltip({ content, show, x, y }: { content: string; show: boolean; x: number; y: number }) {
   if (!show) return null;
   
@@ -52,61 +52,74 @@ function getIconUrl(link: Link): string {
   return '/globe.svg';
 }
 
-export default function LinkCard({ link, className }: LinkCardProps) {
+// 分离 Image 组件以避免整个 LinkCard 重渲染
+const OptimisedLinkIcon = memo(function OptimisedLinkIcon({ 
+  src, 
+  alt, 
+  onLoad, 
+  onError 
+}: { 
+  src: string; 
+  alt: string; 
+  onLoad?: () => void; 
+  onError: () => void;
+}) {
+    return (
+        <img
+            src={src}
+            alt={alt}
+            className={cn(
+                "w-full h-full object-contain transition-opacity duration-200"
+            )}
+            onLoad={onLoad}
+            onError={onError}
+            loading="lazy"
+            decoding="async"
+            fetchPriority="low"
+        />
+    );
+}, (prev, next) => prev.src === next.src);
+
+
+const LinkCard = memo(function LinkCard({ link, className }: LinkCardProps) {
   const [titleTooltip, setTitleTooltip] = useState({ show: false, x: 0, y: 0 });
   const [descTooltip, setDescTooltip] = useState({ show: false, x: 0, y: 0 });
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageSrc, setImageSrc] = useState(getIconUrl(link));
-  const [imageError, setImageError] = useState(false);
-  const imgRef = useRef<HTMLImageElement>(null);
 
-  // 预加载图片
-  useEffect(() => {
-    if (imageSrc && imgRef.current) {
-      const img = new window.Image();
-      img.src = imageSrc;
-      img.onload = () => {
-        if (imgRef.current) {
-          imgRef.current.src = imageSrc;
-          setImageLoaded(true);
-        }
-      };
-      img.onerror = () => {
-        // 如果图片加载失败，使用默认图标
+    // 使用 useCallback 优化事件处理
+    const handleImageError = useCallback(() => {
         setImageSrc('/globe.svg');
-        setImageError(true);
         setImageLoaded(true);
-      };
-    }
-  }, [imageSrc]);
+    }, []);
 
-  // 当 link 属性变化时重置图标状态
-  useEffect(() => {
-    setImageError(false);
-    setImageLoaded(false);
-    setImageSrc(getIconUrl(link));
-  }, [link]);
+    const handleImageLoad = useCallback(() => {
+        setImageLoaded(true);
+    }, []);
 
-  const handleImageError = () => {
-    setImageError(true);
-    setImageLoaded(true);
-  };
-
-  const handleMouseEnter = (
+  const handleMouseEnter = useCallback((
     event: React.MouseEvent<HTMLElement>,
-    setter: typeof setTitleTooltip
+    isTitle: boolean
   ) => {
     const rect = event.currentTarget.getBoundingClientRect();
+    const setter = isTitle ? setTitleTooltip : setDescTooltip;
     setter({
       show: true,
       x: rect.left,
       y: rect.top
     });
-  };
+  }, []);
 
-  const handleMouseLeave = (setter: typeof setTitleTooltip) => {
+  const handleMouseLeave = useCallback((isTitle: boolean) => {
+      const setter = isTitle ? setTitleTooltip : setDescTooltip;
     setter({ show: false, x: 0, y: 0 });
-  };
+  }, []);
+
+  // 当 link 变化时更新图片源
+  useEffect(() => {
+    setImageSrc(getIconUrl(link));
+    setImageLoaded(false);
+  }, [link]);
 
   return (
     <>
@@ -136,19 +149,15 @@ export default function LinkCard({ link, className }: LinkCardProps) {
                        bg-muted/50 p-1.5 border border-border/50"
             >
               <div className="icon-container relative w-full h-full">
-                <img
-                  ref={imgRef}
-                  alt="Site Icon"
-                  className={cn(
-                    "w-full h-full object-contain transition-opacity duration-200",
-                    imageLoaded ? "opacity-100" : "opacity-0"
-                  )}
-                  onError={handleImageError}
-                  loading="eager"
-                  decoding="async"
+                <OptimisedLinkIcon 
+                    src={imageSrc} 
+                    alt={link.name} 
+                    onLoad={handleImageLoad}
+                    onError={handleImageError}
                 />
+                 
                 {!imageLoaded && (
-                  <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="absolute inset-0 flex items-center justify-center bg-muted/20">
                     <div className="w-6 h-6 border-2 border-primary/20 border-t-primary rounded-full animate-spin"></div>
                   </div>
                 )}
@@ -159,8 +168,8 @@ export default function LinkCard({ link, className }: LinkCardProps) {
             <div className="flex-1 min-w-0 relative">
               <div 
                 className="relative"
-                onMouseEnter={(e) => handleMouseEnter(e, setTitleTooltip)}
-                onMouseLeave={() => handleMouseLeave(setTitleTooltip)}
+                onMouseEnter={(e) => handleMouseEnter(e, true)}
+                onMouseLeave={() => handleMouseLeave(true)}
               >
                 <h3 className="text-lg text-foreground
                                group-hover:text-primary
@@ -181,8 +190,8 @@ export default function LinkCard({ link, className }: LinkCardProps) {
           {link.desc && (
             <div 
               className="relative flex-1 min-h-0"
-              onMouseEnter={(e) => handleMouseEnter(e, setDescTooltip)}
-              onMouseLeave={() => handleMouseLeave(setDescTooltip)}
+              onMouseEnter={(e) => handleMouseEnter(e, false)}
+              onMouseLeave={() => handleMouseLeave(false)}
             >
               <p className="text-sm text-foreground/80
                          group-hover:text-foreground
@@ -243,4 +252,18 @@ export default function LinkCard({ link, className }: LinkCardProps) {
       )}
     </>
   );
-}
+}, (prev, next) => {
+    // Custom comparison function for React.memo
+    // Only re-render if key props change
+    return (
+        prev.link.id === next.link.id &&
+        prev.link.name === next.link.name &&
+        prev.link.desc === next.link.desc &&
+        prev.link.url === next.link.url &&
+        prev.link.iconfile === next.link.iconfile &&
+        prev.link.iconlink === next.link.iconlink &&
+        prev.className === next.className
+    );
+});
+
+export default LinkCard;
